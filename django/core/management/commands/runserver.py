@@ -119,6 +119,24 @@ class Command(BaseCommand):
         else:
             self.inner_run(None, **options)
 
+    def _on_bind(self, server_name, server_port):
+        """Display server name and port after server bind."""
+        quit_command = 'CTRL-BREAK' if sys.platform == 'win32' else 'CONTROL-C'
+        now = datetime.now().strftime('%B %d, %Y - %X')
+        self.stdout.write(now)
+        self.stdout.write((
+            "Django version %(version)s, using settings %(settings)r\n"
+            "Starting development server at %(protocol)s://%(addr)s:%(port)s/\n"
+            "Quit the server with %(quit_command)s."
+        ) % {
+            "version": self.get_version(),
+            "settings": settings.SETTINGS_MODULE,
+            "protocol": self.protocol,
+            "addr": '[%s]' % self.addr if self._raw_ipv6 else self.addr,
+            "port": server_port,
+            "quit_command": quit_command,
+        })
+
     def inner_run(self, *args, **options):
         # If an exception was silenced in ManagementUtility.execute in order
         # to be raised in the child process, raise it now.
@@ -126,8 +144,7 @@ class Command(BaseCommand):
 
         threading = options["use_threading"]
         # 'shutdown_message' is a stealth option.
-        shutdown_message = options.get("shutdown_message", "")
-        quit_command = "CTRL-BREAK" if sys.platform == "win32" else "CONTROL-C"
+        shutdown_message = options.get('shutdown_message', '')
 
         if not options["skip_checks"]:
             self.stdout.write("Performing system checks...\n\n")
@@ -135,43 +152,20 @@ class Command(BaseCommand):
         # Need to check migrations here, so can't use the
         # requires_migrations_check attribute.
         self.check_migrations()
-        now = datetime.now().strftime("%B %d, %Y - %X")
-        self.stdout.write(now)
-        self.stdout.write(
-            (
-                "Django version %(version)s, using settings %(settings)r\n"
-                "Starting development server at %(protocol)s://%(addr)s:%(port)s/\n"
-                "Quit the server with %(quit_command)s."
-            )
-            % {
-                "version": self.get_version(),
-                "settings": settings.SETTINGS_MODULE,
-                "protocol": self.protocol,
-                "addr": "[%s]" % self.addr if self._raw_ipv6 else self.addr,
-                "port": self.port,
-                "quit_command": quit_command,
-            }
-        )
-
         try:
             handler = self.get_handler(*args, **options)
-            run(
-                self.addr,
-                int(self.port),
-                handler,
-                ipv6=self.use_ipv6,
-                threading=threading,
-                server_cls=self.server_cls,
-            )
+            run(self.addr, int(self.port), handler,
+                ipv6=self.use_ipv6, threading=threading,
+                server_cls=self.server_cls, on_bind=self._on_bind)
         except OSError as e:
             # Use helpful error messages instead of ugly tracebacks.
             ERRORS = {
-                errno.EACCES: "You don't have permission to access that port.",
-                errno.EADDRINUSE: "That port is already in use.",
-                errno.EADDRNOTAVAIL: "That IP address can't be assigned to.",
+                errno.EACCES: "You don't have permission to access port %(port)s.",
+                errno.EADDRINUSE: "Port %(port)s is already in use.",
+                errno.EADDRNOTAVAIL: "IP address %(addr)r can't be assigned to.",
             }
             try:
-                error_text = ERRORS[e.errno]
+                error_text = ERRORS[e.errno] % dict(addr=self.addr, port=self.port)
             except KeyError:
                 error_text = e
             self.stderr.write("Error: %s" % error_text)
