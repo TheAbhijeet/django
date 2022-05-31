@@ -1676,6 +1676,16 @@ class ManageRunserver(SimpleTestCase):
         mocked_check.assert_called()
 
 
+class TestManageRunserverOnBindOutput(SimpleTestCase):
+    def test_on_bind_output(self):
+        with captured_stdout() as out:
+            cmd = RunserverCommand()
+            cmd.addr = "127.0.0.1"
+            cmd._raw_ipv6 = False
+            cmd._on_bind("14437")
+        self.assertIn("14437", out.getvalue())
+
+
 class ManageRunserverMigrationWarning(TestCase):
     def setUp(self):
         self.stdout = StringIO()
@@ -2363,7 +2373,6 @@ class ExecuteFromCommandLine(SimpleTestCase):
 
 @override_settings(ROOT_URLCONF="admin_scripts.urls")
 class StartProject(LiveServerTestCase, AdminScriptTestCase):
-
     available_apps = [
         "admin_scripts",
         "django.contrib.auth",
